@@ -2,20 +2,19 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Xml.Linq;
-using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using ToDoAPIProject.Models;
 using Microsoft.AspNetCore.Cors;
 
 namespace ToDoAPIProject.Controllers
+    
 {
     [EnableCors]
     [Route("api/[controller]")]
     [ApiController]
-    public class ToDosController : Controller
+    public class ToDosController : ControllerBase
     {
         private readonly ToDoContext _context;
 
@@ -24,173 +23,116 @@ namespace ToDoAPIProject.Controllers
             _context = context;
         }
 
-        // GET: ToDos
-        [HttpGet("{id}")]
-        public async Task<ActionResult<IEnumerable<ToDo>>> GetToDo()
+        // GET: api/ToDoes
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<ToDo>>> GetToDos()
         {
-            if (_context.ToDos == null)
+          if (_context.ToDos == null)
+          {
+              return NotFound();
+          }
+            var todos = await _context.ToDos.Include("Category").Select(x => new ToDo()
             {
-                return NotFound();
-            }
-            //Step 07) Modify the GET functionality to include the Category
-            var resources = await _context.ToDos.Include(x => x.Category).Select(x => new ToDo
-            {
-                //Assign each resource in our data set to a new Resource object for this application.
-                CategoryId = x.CategoryId,
                 ToDoId = x.ToDoId,
                 Name = x.Name,
                 Done = x.Done,
+                CategoryId = x.CategoryId,
                 Category = x.Category != null ? new Category()
-
-
                 {
-
                     CategoryId = x.Category.CategoryId,
-                    CatName = x.Category.CatName,
-                    CatDesc = x.Category.CatDesc
-
+                    CatDesc = x.Category.CatDesc,
+                    CatName = x.Category.CatName
                 } : null
+
             }).ToListAsync();
-
-
-            return Ok(resources);
+            return Ok(todos);
         }
 
-      //  GET: ToDos/Details/5
-        [HttpGet]
+        // GET: api/ToDoes/5
+        [HttpGet("{id}")]
         public async Task<ActionResult<ToDo>> GetToDo(int id)
         {
-            if (_context.ToDos == null)
+          if (_context.ToDos == null)
+          {
+              return NotFound();
+          }
+            var toDo = await _context.ToDos.Where(x => x.ToDoId == id).Select(x => new ToDo()
             {
-                return NotFound();
-            }
+                Name = x.Name,
+                Done = x.Done,
+                CategoryId = x.CategoryId,
+                Category = x.Category != null ? new Category()
+                {
+                    CategoryId = x.Category.CategoryId,
+                    CatDesc = x.Category.CatDesc,
+                    CatName = x.Category.CatName
+                } : null
+            }).FirstOrDefaultAsync();
 
-            var toDo = await _context.ToDos
-               .Where(x => x.ToDoId == id).Select(x => new ToDo()
-               {
-
-                   CategoryId = x.CategoryId,
-                   ToDoId = x.ToDoId,
-                   Name = x.Name,
-                   Done = x.Done,
-                   Category = x.Category != null ? new Category()
-                   {
-                       CategoryId = x.Category.CategoryId,
-                       CatName = x.Category.CatName,
-                       CatDesc = x.Category.CatDesc
-
-                   } : null
-               })
-                .FirstOrDefaultAsync();
             if (toDo == null)
             {
                 return NotFound();
             }
+
             return toDo;
         }
 
-        // GET: ToDos/Create
-        [HttpPost("{id}")]
-        public IActionResult Create()
-        {
-            ViewData["CategoryId"] = new SelectList(_context.Categories, "CategoryId", "CategoryId");
-            return View();
-        }
-
-        // POST: ToDos/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
-   
-        public async Task<IActionResult> Create([Bind("ToDoId,Name,Done,CategoryId")] ToDo toDo)
-        {
-            if (ModelState.IsValid)
-            {
-                _context.Add(toDo);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
-            }
-            ViewData["CategoryId"] = new SelectList(_context.Categories, "CategoryId", "CategoryId", toDo.CategoryId);
-            return View(toDo);
-        }
-
-        // GET: ToDos/Edit/5
+        // PUT: api/ToDoes/5
+        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("{id}")]
-        public async Task<IActionResult> Edit(int? id)
-        {
-            if (id == null || _context.ToDos == null)
-            {
-                return NotFound();
-            }
-
-            var toDo = await _context.ToDos.FindAsync(id);
-            if (toDo == null)
-            {
-                return NotFound();
-            }
-            ViewData["CategoryId"] = new SelectList(_context.Categories, "CategoryId", "CategoryId", toDo.CategoryId);
-            return View(toDo);
-        }
-
-        // POST: ToDos/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPut]
-    
-        public async Task<IActionResult> Edit(int id, [Bind("ToDoId,Name,Done,CategoryId")] ToDo toDo)
+        public async Task<IActionResult> PutToDo(int id, ToDo toDo)
         {
             if (id != toDo.ToDoId)
             {
-                return NotFound();
+                return BadRequest();
             }
 
-            if (ModelState.IsValid)
+            _context.Entry(toDo).State = EntityState.Modified;
+
+            try
             {
-                try
-                {
-                    _context.Update(toDo);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ToDoExists(toDo.ToDoId))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                await _context.SaveChangesAsync();
             }
-            ViewData["CategoryId"] = new SelectList(_context.Categories, "CategoryId", "CategoryId", toDo.CategoryId);
-            return View(toDo);
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!ToDoExists(id))
+                {
+                    return NotFound();
+                }
+                else
+                {
+                    throw;
+                }
+            }
+
+            return NoContent();
         }
 
-        // GET: ToDos/Delete/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int? id)
+        // POST: api/ToDoes
+        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        [HttpPost]
+        public async Task<ActionResult<ToDo>> PostToDo(ToDo toDo)
         {
-            if (id == null || _context.ToDos == null)
+          if (_context.ToDos == null)
+          {
+              return Problem("Entity set 'ToDoContext.ToDos'  is null.");
+          }
+            ToDo newToDo = new ToDo()
             {
-                return NotFound();
-            }
+                ToDoId = toDo.ToDoId,
+                Done = toDo.Done,
+                Name = toDo.Name,
+                CategoryId = toDo.CategoryId
+            };
+            _context.ToDos.Add(newToDo);
+            await _context.SaveChangesAsync();
 
-            var toDo = await _context.ToDos
-                .Include(t => t.Category)
-                .FirstOrDefaultAsync(m => m.ToDoId == id);
-            if (toDo == null)
-            {
-                return NotFound();
-            }
-
-            return View(toDo);
+            return Ok(newToDo);
         }
 
-        // POST: ToDos/Delete/5
-        [HttpDelete]
-        public async Task<IActionResult> DeleteConfirmed(int id)
+        // DELETE: api/ToDoes/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteToDo(int id)
         {
             if (_context.ToDos == null)
             {
@@ -204,12 +146,13 @@ namespace ToDoAPIProject.Controllers
 
             _context.ToDos.Remove(toDo);
             await _context.SaveChangesAsync();
+
             return NoContent();
         }
 
         private bool ToDoExists(int id)
         {
-          return (_context.ToDos?.Any(e => e.ToDoId == id)).GetValueOrDefault();
+            return (_context.ToDos?.Any(e => e.ToDoId == id)).GetValueOrDefault();
         }
     }
 }
